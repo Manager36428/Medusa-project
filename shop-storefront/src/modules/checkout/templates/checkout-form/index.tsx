@@ -4,13 +4,12 @@ import {
   listCartShippingMethods,
 } from "@lib/data"
 import { getCheckoutStep } from "@lib/util/get-checkout-step"
+import { PricedShippingOption } from "@medusajs/medusa/dist/types/pricing"
 import Addresses from "@modules/checkout/components/addresses"
 import Payment from "@modules/checkout/components/payment"
 import Review from "@modules/checkout/components/review"
 import Shipping from "@modules/checkout/components/shipping"
-import axios from "axios"
 import { cookies } from "next/headers"
-import api from "services/api"
 import { CartWithCheckoutStep } from "types/global"
 
 export default async function CheckoutForm() {
@@ -31,12 +30,13 @@ export default async function CheckoutForm() {
 
   cart.checkout_step = cart && getCheckoutStep(cart)
   // get available shipping methods
-  const availableShippingMethods = (
-    await axios.get(
-      `${process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL}/store/carts/shippit-shipping-methods/${cart.id}`
-    )
-  ).data
+  const availableShippingMethods = await listCartShippingMethods(cart.id)
+  // const customShippingMethods = await fetch(
+  //   `${process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL}/store/carts/shippit-shipping-methods/${cart.id}`
+  // )
 
+  // const availableShippingMethods =
+  //   (await customShippingMethods.json()) as PricedShippingOption[]
   if (!availableShippingMethods) {
     return null
   }

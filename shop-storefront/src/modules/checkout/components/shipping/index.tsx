@@ -124,7 +124,11 @@ const Shipping: React.FC<ShippingProps> = ({
                             cart.shipping_methods[0]?.shipping_option_id
                           }
                         />
-                        <span className="text-base-regular">{option.name}</span>
+                        <span className="text-base-regular">
+                          {option.name
+                            ?.split(`${cart.id}|`)[1]
+                            ?.toUpperCase() ?? option.name?.toUpperCase()}
+                        </span>
                       </div>
                       <span className="justify-self-end text-ui-fg-base">
                         {formatAmount({

@@ -7,6 +7,7 @@ import {
 import ShippingOptionRepository from "@medusajs/medusa/dist/repositories/shipping-option";
 import { ShippingOptionPricing } from "@medusajs/medusa/dist/types/pricing";
 import axios from "axios";
+import { Like } from "typeorm";
 
 type quoteType = {
   success: boolean;
@@ -29,15 +30,26 @@ class CartService extends MedusaCartService {
   }
 
   async getShippitShippingMethods(id: string) {
-    const cart = await this.retrieve(id);
-    const shippingOptions = await this.getShippitShippingOptions(cart);
+    const cart = await this.retrieve(id, {
+      relations: ["items.variant", "shipping_address"],
+    });
+    if (!cart) return Error("No cart found");
+    const shippingOptions = (await this.getShippitShippingOptions(
+      cart.id
+    )) as ShippingOption[];
+    if (!shippingOptions) return Error("Couldn't create shipping options");
     const shippingMethods = [] as PricedShippingOption[];
     for (const shippingOption of shippingOptions) {
       const shippingMethod =
         await this.shippingOptionService_.createShippingMethod(
           shippingOption.id,
-          { ...shippingOption.data },
-          { cart_id: cart.id }
+          shippingOption.data,
+          {
+            shipping_option_id: shippingOption.id,
+            cart_id: cart.id,
+            price: shippingOption.amount,
+            data: shippingOption.data,
+          }
         );
       if (shippingMethod)
         shippingMethods.push({
@@ -50,26 +62,52 @@ class CartService extends MedusaCartService {
     return shippingMethods;
   }
 
-  async getShippitShippingOptions(cart: Cart) {
-    const quotes = (await this.calculateQuote(cart)) as quoteType[];
+  async getShippitShippingOptions(
+    id: string
+  ): Promise<ShippingOption[] | Error> {
+    const cart = await this.retrieve(id, {
+      relations: ["items.variant", "shipping_address"],
+    });
+    if (!cart) return Error("No cart found");
     const shippingOptionRepo = this.manager_.withRepository(
       this.shippingOptionRepository_
     );
+
+    const retrieveShippingOptions = await shippingOptionRepo.find({
+      where: {
+        name: Like(`%${cart.id}%`),
+      },
+    });
+    if (retrieveShippingOptions.length) return retrieveShippingOptions;
+    const quotes = (await this.calculateQuote(cart)) as quoteType[];
+
+    const shippingProfile = await this.shippingProfileService_.createDefault();
     const shippingOptions = [];
     for (const quote of quotes) {
-      const shippingOption = await shippingOptionRepo.save({
-        name: quote.service_level,
+      const shippingOption = shippingOptionRepo.create({
+        name: `${cart.id}|${quote.service_level}`,
         price_type: ShippingOptionPriceType.CALCULATED,
-        amount: quote.quotes[0]?.price,
-        admin_only: true,
-        region_id: cart.region_id,
+        amount: Math.floor(quote.quotes[0]?.price * 100),
+        admin_only: false,
         provider_id: "manual",
+        profile_id: shippingProfile.id,
+        region_id: cart.region_id,
         is_return: false,
         data: {
           estimated_transit_time: quote.quotes[0]?.estimated_transit_time,
         },
       });
-      if (shippingOption) shippingOptions.push(shippingOption);
+      if (shippingOption) {
+        const save = await shippingOptionRepo.save(shippingOption);
+        shippingOptions.push(save);
+      } else {
+        const shippingOption = await shippingOptionRepo.findOne({
+          where: {
+            name: quote.service_level,
+          },
+        });
+        if (shippingOption) shippingOptions.push(shippingOption);
+      }
     }
     return shippingOptions;
   }
@@ -92,18 +130,17 @@ class CartService extends MedusaCartService {
 
     const getQuote = await axios.post(
       "https://app.staging.shippit.com/api/3/quotes",
-      quote,
+      { quote: quote },
       {
         headers: {
           Authorization: `Bearer ${process.env.SHIPPIT_API_KEY}`,
         },
       }
     );
-
-    const standard = getQuote.data.find(
+    const standard = getQuote.data.response.find(
       (r) => r.service_level === "standard"
     ) as quoteType;
-    const express = getQuote.data.find(
+    const express = getQuote.data.response.find(
       (r) => r.service_level === "express"
     ) as quoteType;
 
