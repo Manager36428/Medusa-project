@@ -86,7 +86,7 @@ class CartService extends MedusaCartService {
     for (const quote of quotes) {
       const shippingOption = shippingOptionRepo.create({
         name: `${cart.id}|${quote.service_level}`,
-        price_type: ShippingOptionPriceType.CALCULATED,
+        price_type: ShippingOptionPriceType.FLAT_RATE,
         amount: Math.floor(quote.quotes[0]?.price * 100),
         admin_only: false,
         provider_id: "manual",

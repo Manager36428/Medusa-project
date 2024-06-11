@@ -30,13 +30,13 @@ export default async function CheckoutForm() {
 
   cart.checkout_step = cart && getCheckoutStep(cart)
   // get available shipping methods
-  const availableShippingMethods = await listCartShippingMethods(cart.id)
-  // const customShippingMethods = await fetch(
-  //   `${process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL}/store/carts/shippit-shipping-methods/${cart.id}`
-  // )
+  // const availableShippingMethods = await listCartShippingMethods(cart.id)
+  const customShippingMethods = await fetch(
+    `${process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL}/store/carts/shippit-shipping-methods/${cart.id}`
+  )
 
-  // const availableShippingMethods =
-  //   (await customShippingMethods.json()) as PricedShippingOption[]
+  const availableShippingMethods =
+    (await customShippingMethods.json()) as PricedShippingOption[]
   if (!availableShippingMethods) {
     return null
   }
